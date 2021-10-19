@@ -1,4 +1,4 @@
-# Specify functions you want to extend with multidispatch for some reason
+# Specify functions you want to extend with multidispatch
 import MetaGraphs: AbstractMetaGraph, PropDict, MetaDict, set_prop!, get_prop, props, rem_vertex!, add_vertex!, merge_vertices!, add_edge!, nv
 
 # Verticies in all graphs share same properties
@@ -6,6 +6,7 @@ import MetaGraphs: AbstractMetaGraph, PropDict, MetaDict, set_prop!, get_prop, p
 # Individual graphs have their own edge properties
 DEFAULT_VERTEX_PROPERTIES = Dict(
     :name => "0",
+    :original_numbers => Set(0),
     :activation => 0,
     :age => 0,
     :value => 0,
@@ -13,26 +14,27 @@ DEFAULT_VERTEX_PROPERTIES = Dict(
 )
 
 include("./prediction-weights.jl")
+include("./pattern-weights.jl")
 
 mutable struct EpsilonNetwork
     prw::MetaDiGraph
+    paw::MetaDiGraph
     removed_neurons::Set{Int}
 end
 
 # iterable of all metadigraphs in epsilon network
-networks(en::EpsilonNetwork) = (en.prw,)
+networks(en::EpsilonNetwork) = (en.prw, en.paw)
 is_directed(en::EpsilonNetwork) = true
 # nodes in all graphs are identical, so we just get the props of node v in the first graph
 props(en::EpsilonNetwork, v::Int) = props(networks(en)[1], v)
 get_prop(en::EpsilonNetwork, v::Int, prop::Symbol) = get_prop(networks(en)[1], v, prop)
-neurons(en::EpsilonNetwork) = [v for v in vertices(networks(en)[1]) if not_removed(v, en)]
+props(en::EpsilonNetwork, v::Int) = props(networks(en)[1], v)
+neurons(en::EpsilonNetwork) = [v for v in vertices(networks(en)[1]) if !removed(v, en)]
 nv(en::EpsilonNetwork) = nv(networks(en)[1])
 is_active(en::EpsilonNetwork, v::Int) = Bool(get_prop(networks(en)[1], v, :activation))
-increment_age!(en::EpsilonNetwork, v::Int) = update_prop!(en, v, :age, x-> x+1)
-increment_value!(en::EpsilonNetwork, v::Int) = update_prop!(en, v, :value, x -> x+1)
 deactivate_neuron!(en::EpsilonNetwork, v::Int) = set_prop!(en, v, :activation, 0)
-valid_edges(mg::MetaDiGraph) = [e for e in edges(mg) if not_removed(e.src, en) && not_removed(e.dst, en)]
-not_removed(v::Int, en) = !in(v, en.removed_neurons)
+valid_edges(mg::MetaDiGraph) = [e for e in edges(mg) if !removed(e.src, en) && !removed(e.dst, en)]
+removed(v::Int, en::EpsilonNetwork) = in(v, en.removed_neurons)
 
 function update_prop!(en::EpsilonNetwork, v::Int, prop::Symbol, func::Function)
     for weight_graph in networks(en)
@@ -50,13 +52,14 @@ function add_neuron!(en::EpsilonNetwork)
     for weight_graph in networks(en)
         add_vertex!(weight_graph, copy(DEFAULT_VERTEX_PROPERTIES))
         set_prop!(weight_graph, nv(en), :name, string(nv(en)))
+        set_prop!(weight_graph, nv(en), :original_numbers, Set(nv(en)))
     end
     return nv(networks(en)[1])
 end
 
 
 function EpsilonNetwork(x::Int)
-    en = EpsilonNetwork(MetaDiGraph(), Set{Int}())
+    en = EpsilonNetwork(MetaDiGraph(), MetaDiGraph(), Set{Int}())
     for i in 1:x
         add_neuron!(en)
     end
@@ -100,13 +103,15 @@ average_prop(prop_dicts::Vector{Dict{Symbol, Any}}, prop::Symbol)::Int = mean([d
 function create_merged_vertex!(en::EpsilonNetwork, vs::Vector{Int})
     # Make a new neuron with the average props of vs
     neuron = add_neuron!(en)
-    set_prop!(en, neuron, :age, average_prop([props(networks(en)[1], v) for v in vs], :age))
-    set_prop!(en, neuron, :value, average_prop([props(networks(en)[1], v) for v in vs], :value))
-    name = string("{",[string(v, ", ") for v in vs[1:end-1]]...,string(vs[end]),"}")
+    set_prop!(en, neuron, :age, average_prop([props(en, v) for v in vs], :age))
+    set_prop!(en, neuron, :value, average_prop([props(en, v) for v in vs], :value))
+    og_numbers::Vector{Int} = [n for n in union([get_prop(en, v, :original_numbers) for v in vs]...)]
+    set_prop!(en, neuron, :original_numbers, Set(og_numbers))
+    name = string("{",[string(v, ", ") for v in og_numbers[1:end-1]]...,string(og_numbers[end]),"}")
     rename_neuron!(en, neuron, name)
     for weight_graph in networks(en)
-        all_out_neighbors = [outneighbors(weight_graph, v) for v in vs] |> x->cat(x..., dims=1) |> Set
-        all_in_neighbors  = [inneighbors(weight_graph, v) for v in vs] |> x->cat(x..., dims=1) |> Set
+        all_out_neighbors::Set{Int} = [outneighbors(weight_graph, v) for v in vs] |> x->cat(x..., dims=1) |> Set
+        all_in_neighbors::Set{Int}  = [inneighbors(weight_graph, v) for v in vs] |> x->cat(x..., dims=1) |> Set
         for out_neighbor in all_out_neighbors
             # merge all props that go from one node into to multiple nodes in vs
             #
@@ -144,18 +149,22 @@ function create_merged_vertex!(en::EpsilonNetwork, vs::Vector{Int})
                 props(weight_graph, in_neighbor, v)
                 for v in vs if has_edge(weight_graph, in_neighbor, v)
             ]
+
             new_edge_props = copy(DEFAULT_EDGE_PROPERTIES)
             new_edge_props[:age] = average_prop(current_edges, :age)
             new_edge_props[:value] = average_prop(current_edges, :value)
+            println(new_edge_props[:value])
 
             add_edge!(weight_graph, in_neighbor, neuron, new_edge_props)
         end
     end
+    return neuron
 end
 
 
 function snap!(prw::MetaDiGraph)
     similar_neurons = Vector{Vector{Int}}()
+    snap_map::Dict{Int,Int} = Dict()
     for neuron in neurons(prw)
         found_snap_group = false
         for (j, neuron_group) in enumerate(similar_neurons)
@@ -170,14 +179,25 @@ function snap!(prw::MetaDiGraph)
         end
     end
     for snap_set in similar_neurons
-        println("snapping ", snap_set)
         if length(snap_set) > 1
-            create_merged_vertex!(en, snap_set)
+            new_neuron::Int = create_merged_vertex!(en, snap_set)
+            for original_number in get_prop(prw, new_neuron, :original_numbers)
+                snap_map[original_number] = new_neuron
+            end
+            snap_map[new_neuron] = new_neuron
             for neuron in snap_set
                 remove_neuron!(en, neuron)
             end
+        else
+            for neuron in snap_set
+                if !get_prop(prw, neuron, :removed)
+                    snap_map[neuron] = neuron
+                end
+            end
         end
     end
+
+    return snap_map
 end
 
 function draw_en(en::EpsilonNetwork)

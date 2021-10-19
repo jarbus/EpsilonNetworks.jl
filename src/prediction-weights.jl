@@ -4,7 +4,8 @@ DEFAULT_EDGE_PROPERTIES = Dict(
     :value => 1,
 )
 
-neurons(g) = vertices(g)
+removed(v, prw::MetaDiGraph) = get_prop(prw, v, :removed)
+neurons(g) = [v for v in vertices(g) if !removed(v, g)]
 
 function add_prw!(prw::MetaDiGraph, v1::Int, v2::Int)
     if !get_prop(prw, v1, :removed) && !get_prop(prw, v2, :removed)
@@ -19,6 +20,7 @@ end
 
 
 function PrW(prw::MetaDiGraph, v1::Int, v2::Int)
+    # println(get_prop(prw, v1, v2, :value), ", ", get_prop(prw, v1, :age), ": ",v1," => ",v2)
     round(get_prop(prw, v1, v2, :value) /
           get_prop(prw, v1, :age), digits=1)
 end
