@@ -13,6 +13,7 @@ DEFAULT_VERTEX_PROPERTIES = Dict(
     :removed => false,
 )
 
+M = 40
 include("./prediction-weights.jl")
 include("./pattern-weights.jl")
 
@@ -70,7 +71,9 @@ end
 # Functions to act on all graphs in the epsilon network
 function activate_neuron!(en::EpsilonNetwork, v::Int)
     set_prop!(en, v, :activation, 1)
-    update_prop!(en, v, :age, x->x+1)
+    if get_prop(en, v, :age) < M # M=20 from paper
+        update_prop!(en, v, :age, x->x+1)
+    end
 end
 
 
@@ -153,7 +156,6 @@ function create_merged_vertex!(en::EpsilonNetwork, vs::Vector{Int})
             new_edge_props = copy(DEFAULT_EDGE_PROPERTIES)
             new_edge_props[:age] = average_prop(current_edges, :age)
             new_edge_props[:value] = average_prop(current_edges, :value)
-            println(new_edge_props[:value])
 
             add_edge!(weight_graph, in_neighbor, neuron, new_edge_props)
         end
@@ -201,15 +203,14 @@ function snap!(prw::MetaDiGraph)
 end
 
 function draw_en(en::EpsilonNetwork)
+    # Remove PrW with small probabilities
+    rem_small_prw!(en.prw)
     # Draw all nodes in en
-    nodelabels =
-    [   get_prop(en, n, :name)
-        for n in neurons(en) ]
+    nodelabels = [get_prop(en, n, :name) for n in neurons(en)]
 
-    edgelabels =
-    [   PrW(en.prw, edge.src, edge.dst)
-        for edge in valid_edges(en.prw)]
+    edgelabels = [PrW(en.prw, edge) for edge in valid_edges(en.prw)]
+    println(edgelabels)
     subgraph = induced_subgraph(en.prw, [n for n in neurons(en) if !get_prop(en.prw, n, :removed)])[1]
-    draw(PDF("prw.pdf", 16cm, 16cm), gplot(subgraph, nodelabel=nodelabels, edgelabel=edgelabels))
+    draw(PDF("prw.pdf", 16cm, 16cm), gplot(subgraph, layout=circular_layout, nodelabel=nodelabels, edgelabel=edgelabels))
 
 end

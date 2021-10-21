@@ -1,5 +1,4 @@
-using Revise
-using LightGraphs, MetaGraphs, GraphPlot
+using Graphs, MetaGraphs, GraphPlot
 using Compose
 import Cairo, Fontconfig
 include("./epsilon-network.jl")
@@ -15,8 +14,7 @@ include("./epsilon-network.jl")
 # 1         4  5  6
 #   2       7  8  9
 #     3    10 11 12
-#
-#
+
 data = [1 5 6 7 8 9 10 11 12; 2 4 5 6 7 9 10 11 12; 3 4 5 6 7 8 9 10 11]
 data = cat([data for i in 1:50]..., dims=1)
 num_inputs = length(unique(data))
@@ -44,7 +42,6 @@ for i in 1:size(data, 1)
     end
     if i % 50 == 0
         merge!(snap_map, snap!(en.prw))
-        # println(snap_map)
     end
 end
 

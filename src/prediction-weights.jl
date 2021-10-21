@@ -12,17 +12,38 @@ function add_prw!(prw::MetaDiGraph, v1::Int, v2::Int)
         if !has_edge(prw, v1, v2)
             add_edge!(prw, v1, v2)
             set_props!(prw, v1, v2, DEFAULT_EDGE_PROPERTIES)
-        else
+        elseif get_prop(en, v1, :age) < M # M=20 from paper
             set_prop!(prw, v1, v2, :value, get_prop(prw, v1, v2, :value)+1)
+        end
+    end
+end
+
+function rem_small_prw!(prw::MetaDiGraph)
+    for edge in valid_edges(prw)
+        if PrW(prw, edge) < 0.8
+            success::Bool = rem_edge!(prw, edge)
+            if !success
+                println("failed to remove edge")
+            end
+        end
+    end
+
+    for edge in edges(prw)
+        if PrW(prw, edge) < 0.8
+            println("kept edge ", edge, " ", PrW(prw, edge))
         end
     end
 end
 
 
 function PrW(prw::MetaDiGraph, v1::Int, v2::Int)
-    # println(get_prop(prw, v1, v2, :value), ", ", get_prop(prw, v1, :age), ": ",v1," => ",v2)
     round(get_prop(prw, v1, v2, :value) /
           get_prop(prw, v1, :age), digits=1)
+end
+
+function PrW(prw::MetaDiGraph, edge)
+    round(get_prop(prw, edge.src, edge.dst, :value) /
+          get_prop(prw, edge.src, :age), digits=1)
 end
 
 function is_similar(prw::MetaDiGraph, v1::Int, v2::Int)
