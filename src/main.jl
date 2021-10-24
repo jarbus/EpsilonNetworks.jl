@@ -1,7 +1,5 @@
 # run `julia> ]activate .` in main project directory before running
 
-using Compose
-import Cairo, Fontconfig
 include("epsilon-network.jl")
 
 # Falling ball example

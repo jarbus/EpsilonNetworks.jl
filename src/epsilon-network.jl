@@ -1,6 +1,14 @@
 # Specify functions you want to extend with multidispatch
+#
 using Graphs, MetaGraphs, GraphPlot
 import MetaGraphs: AbstractMetaGraph, PropDict, MetaDict, set_prop!, get_prop, props, rem_vertex!, add_vertex!, merge_vertices!, add_edge!, nv
+
+# For drawing en
+using Compose
+import Cairo, Fontconfig
+
+using Test
+
 
 # Verticies in all graphs share same properties
 # This must be defined before importing any graphs
