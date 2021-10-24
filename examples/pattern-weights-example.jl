@@ -1,6 +1,4 @@
-# run `julia> ]activate .` in main project directory before running
-
-include("epsilon-network.jl")
+include("../src/epsilon-network.jl")
 
 # Falling ball example
 # Black is 1 2 3, White is 4 5 6
@@ -14,7 +12,8 @@ include("epsilon-network.jl")
 #   2       7  8  9
 #     3    10 11 12
 
-data = [1 5 6 7 8 9 10 11 12; 2 4 5 6 7 9 10 11 12; 3 4 5 6 7 8 9 10 11]
+# Bomb example
+data = [1; 3; 5; 2; 4; 5]
 data = cat([data for i in 1:50]..., dims=1)
 num_inputs = length(unique(data))
 en = EpsilonNetwork(num_inputs)

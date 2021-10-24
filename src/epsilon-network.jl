@@ -101,12 +101,9 @@ function process_input!(en::EpsilonNetwork, input_vector::Vector{Int})
                 new_prws += add_prw!(en.prw, prev_neuron, neuron)
             end
             # Create pattern weight
-            if new_prws == 0 &&
-                length(en.stm) > 1 &&
-                max([PrW(en.prw, prev, neuron) for prev in en.stm]...) < 0.8
-                # new_pattern_node = add_neuron!(en)
-                # for inn in inneighbors(en.prw, neuron)
-                # end
+            if new_prws == 0 && length(en.stm) > 1 && max([PrW(en.prw, innei, neuron) for innei in inneighbors(en.prw, neuron)]...) < 0.8
+                new_pattern_node = add_neuron!(en)
+                create_pattern_weight(en, inneighbors(en.prw, neuron), new_pattern_node)
             end
 
         end
