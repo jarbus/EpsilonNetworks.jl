@@ -14,14 +14,37 @@ DEFAULT_VERTEX_PROPERTIES = Dict(
 )
 
 M = 40
-include("./prediction-weights.jl")
-include("./pattern-weights.jl")
 
 mutable struct EpsilonNetwork
     prw::MetaDiGraph
     paw::MetaDiGraph
+    stm::Set{Int}
     removed_neurons::Set{Int}
+    snap_map::Dict{Int, Int}
+    time_step::Int
 end
+
+
+function EpsilonNetwork(x::Int)
+    snap_map = Dict(i => i for i in 1:num_inputs)
+    en = EpsilonNetwork(
+        MetaDiGraph(), # prw
+        MetaDiGraph(), # paw
+        Set(),         # removed neurons
+        Set(),         # stm
+        snap_map,      # snap_map
+        1,             # timestep
+    )
+    for i in 1:x
+        add_neuron!(en)
+    end
+    return en
+end
+
+
+include("./prediction-weights.jl")
+include("./pattern-weights.jl")
+
 
 # iterable of all metadigraphs in epsilon network
 networks(en::EpsilonNetwork) = (en.prw, en.paw)
@@ -59,12 +82,38 @@ function add_neuron!(en::EpsilonNetwork)
 end
 
 
-function EpsilonNetwork(x::Int)
-    en = EpsilonNetwork(MetaDiGraph(), MetaDiGraph(), Set{Int}())
-    for i in 1:x
-        add_neuron!(en)
+
+function process_input!(en::EpsilonNetwork, input_vector::Vector{Int})
+    for input in input_vector
+        neuron = en.snap_map[input]
+        if !is_active(en, neuron)
+            activate_neuron!(en, neuron)
+            new_prws::Int = 0
+            for prev_neuron in en.stm
+                new_prws += add_prw!(en.prw, prev_neuron, neuron)
+            end
+            # Create pattern weight
+            if new_prws == 0 &&
+                length(en.stm) > 1 &&
+                max([PrW(en.prw, prev, neuron) for prev in en.stm]...) < 0.8
+                # new_pattern_node = add_neuron!(en)
+                # for inn in inneighbors(en.prw, neuron)
+                # end
+            end
+
+        end
     end
-    return en
+    empty!(en.stm)
+    for neuron in neurons(en)
+        if is_active(en, neuron)
+            push!(en.stm, neuron)
+            deactivate_neuron!(en, neuron)
+        end
+    end
+    if en.time_step % 50 == 0
+        merge!(en.snap_map, snap!(en.prw))
+    end
+    en.time_step += 1
 end
 
 
@@ -131,7 +180,7 @@ function create_merged_vertex!(en::EpsilonNetwork, vs::Vector{Int})
                     for v in vs if has_edge(weight_graph, v, out_neighbor)
             ]
 
-            new_edge_props = copy(DEFAULT_EDGE_PROPERTIES)
+            new_edge_props = copy(DEFAULT_PRW_PROPERTIES)
             new_edge_props[:age] = average_prop(current_edges, :age)
             new_edge_props[:value] = average_prop(current_edges, :value)
             add_edge!(weight_graph, neuron, out_neighbor, new_edge_props)
@@ -153,7 +202,7 @@ function create_merged_vertex!(en::EpsilonNetwork, vs::Vector{Int})
                 for v in vs if has_edge(weight_graph, in_neighbor, v)
             ]
 
-            new_edge_props = copy(DEFAULT_EDGE_PROPERTIES)
+            new_edge_props = copy(DEFAULT_PRW_PROPERTIES)
             new_edge_props[:age] = average_prop(current_edges, :age)
             new_edge_props[:value] = average_prop(current_edges, :value)
 
@@ -164,13 +213,13 @@ function create_merged_vertex!(en::EpsilonNetwork, vs::Vector{Int})
 end
 
 
-function snap!(prw::MetaDiGraph)
+function snap!(en::EpsilonNetwork)
     similar_neurons = Vector{Vector{Int}}()
     snap_map::Dict{Int,Int} = Dict()
-    for neuron in neurons(prw)
+    for neuron in neurons(en)
         found_snap_group = false
         for (j, neuron_group) in enumerate(similar_neurons)
-            if is_similar(prw, neuron, neuron_group[1])
+            if is_similar(en.prw, neuron, neuron_group[1])
                 push!(similar_neurons[j], neuron)
                 found_snap_group = true
                 break
@@ -183,7 +232,7 @@ function snap!(prw::MetaDiGraph)
     for snap_set in similar_neurons
         if length(snap_set) > 1
             new_neuron::Int = create_merged_vertex!(en, snap_set)
-            for original_number in get_prop(prw, new_neuron, :original_numbers)
+            for original_number in get_prop(en, new_neuron, :original_numbers)
                 snap_map[original_number] = new_neuron
             end
             snap_map[new_neuron] = new_neuron
@@ -192,7 +241,7 @@ function snap!(prw::MetaDiGraph)
             end
         else
             for neuron in snap_set
-                if !get_prop(prw, neuron, :removed)
+                if !get_prop(en, neuron, :removed)
                     snap_map[neuron] = neuron
                 end
             end
@@ -209,7 +258,6 @@ function draw_en(en::EpsilonNetwork)
     nodelabels = [get_prop(en, n, :name) for n in neurons(en)]
 
     edgelabels = [PrW(en.prw, edge) for edge in valid_edges(en.prw)]
-    println(edgelabels)
     subgraph = induced_subgraph(en.prw, [n for n in neurons(en) if !get_prop(en.prw, n, :removed)])[1]
     draw(PDF("prw.pdf", 16cm, 16cm), gplot(subgraph, layout=circular_layout, nodelabel=nodelabels, edgelabel=edgelabels))
 
