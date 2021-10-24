@@ -1,4 +1,5 @@
 # Specify functions you want to extend with multidispatch
+using Graphs, MetaGraphs, GraphPlot
 import MetaGraphs: AbstractMetaGraph, PropDict, MetaDict, set_prop!, get_prop, props, rem_vertex!, add_vertex!, merge_vertices!, add_edge!, nv
 
 # Verticies in all graphs share same properties
@@ -26,7 +27,7 @@ end
 
 
 function EpsilonNetwork(x::Int)
-    snap_map = Dict(i => i for i in 1:num_inputs)
+    snap_map = Dict(i => i for i in 1:x)
     en = EpsilonNetwork(
         MetaDiGraph(), # prw
         MetaDiGraph(), # paw
@@ -52,7 +53,6 @@ is_directed(en::EpsilonNetwork) = true
 # nodes in all graphs are identical, so we just get the props of node v in the first graph
 props(en::EpsilonNetwork, v::Int) = props(networks(en)[1], v)
 get_prop(en::EpsilonNetwork, v::Int, prop::Symbol) = get_prop(networks(en)[1], v, prop)
-props(en::EpsilonNetwork, v::Int) = props(networks(en)[1], v)
 neurons(en::EpsilonNetwork) = [v for v in vertices(networks(en)[1]) if !removed(v, en)]
 nv(en::EpsilonNetwork) = nv(networks(en)[1])
 is_active(en::EpsilonNetwork, v::Int) = Bool(get_prop(networks(en)[1], v, :activation))
@@ -111,7 +111,7 @@ function process_input!(en::EpsilonNetwork, input_vector::Vector{Int})
         end
     end
     if en.time_step % 50 == 0
-        merge!(en.snap_map, snap!(en.prw))
+        merge!(en.snap_map, snap!(en))
     end
     en.time_step += 1
 end

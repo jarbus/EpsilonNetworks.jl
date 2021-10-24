@@ -1,7 +1,8 @@
-using Graphs, MetaGraphs, GraphPlot
+# run `julia> ]activate .` in main project directory before running
+
 using Compose
 import Cairo, Fontconfig
-include("./epsilon-network.jl")
+include("epsilon-network.jl")
 
 # Falling ball example
 # Black is 1 2 3, White is 4 5 6
