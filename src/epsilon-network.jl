@@ -1,14 +1,5 @@
+
 # Specify functions you want to extend with multidispatch
-#
-using Graphs, MetaGraphs, GraphPlot
-import MetaGraphs: AbstractMetaGraph, PropDict, MetaDict, set_prop!, get_prop, props, rem_vertex!, add_vertex!, merge_vertices!, add_edge!, nv
-
-# For drawing en
-using Compose
-import Cairo, Fontconfig
-
-using Test
-
 
 # Verticies in all graphs share same properties
 # This must be defined before importing any graphs
@@ -65,8 +56,9 @@ neurons(en::EpsilonNetwork) = [v for v in vertices(networks(en)[1]) if !removed(
 nv(en::EpsilonNetwork) = nv(networks(en)[1])
 is_active(en::EpsilonNetwork, v::Int) = Bool(get_prop(networks(en)[1], v, :activation))
 deactivate_neuron!(en::EpsilonNetwork, v::Int) = set_prop!(en, v, :activation, 0)
-valid_edges(mg::MetaDiGraph) = [e for e in edges(mg) if !removed(e.src, en) && !removed(e.dst, en)]
+valid_edges(mg::MetaDiGraph) = [e for e in edges(mg) if !removed(e.src, mg) && !removed(e.dst, mg)]
 removed(v::Int, en::EpsilonNetwork) = in(v, en.removed_neurons)
+removed(v::Int, mg::MetaDiGraph) = get_prop(mg, v, :removed)
 
 function update_prop!(en::EpsilonNetwork, v::Int, prop::Symbol, func::Function)
     for weight_graph in networks(en)

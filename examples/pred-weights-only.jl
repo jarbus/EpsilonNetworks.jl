@@ -1,4 +1,4 @@
-include("epsilon-network.jl")
+using EpsilonNetworks
 
 # Falling ball example
 # Black is 1 2 3, White is 4 5 6

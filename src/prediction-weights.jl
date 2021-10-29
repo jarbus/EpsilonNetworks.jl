@@ -21,7 +21,7 @@ function add_prw!(prw::MetaDiGraph, v1::Int, v2::Int)::Bool
             add_edge!(prw, v1, v2)
             set_props!(prw, v1, v2, DEFAULT_PRW_PROPERTIES)
             return true
-        elseif get_prop(en, v1, :age) < M # M=20 from paper
+        elseif get_prop(prw, v1, :age) < M # M=20 from paper
             set_prop!(prw, v1, v2, :value, get_prop(prw, v1, v2, :value)+1)
         end
     end
