@@ -1,4 +1,3 @@
-
 # Specify functions you want to extend with multidispatch
 
 # Verticies in all graphs share same properties
@@ -248,14 +247,14 @@ function snap!(en::EpsilonNetwork)
     return snap_map
 end
 
-function draw_en(en::EpsilonNetwork)
+function draw_en(filename::String, en::EpsilonNetwork; hide_small_predictions::Bool=true)
     # Remove PrW with small probabilities
-    rem_small_prw!(en.prw)
+    hide_small_predictions && rem_small_prw!(en.prw)
     # Draw all nodes in en
     nodelabels = [get_prop(en, n, :name) for n in neurons(en)]
 
     edgelabels = [PrW(en.prw, edge) for edge in valid_edges(en.prw)]
     subgraph = induced_subgraph(en.prw, [n for n in neurons(en) if !get_prop(en.prw, n, :removed)])[1]
-    draw(PDF("prw.pdf", 16cm, 16cm), gplot(subgraph, layout=circular_layout, nodelabel=nodelabels, edgelabel=edgelabels))
+    draw(PDF(filename, 16cm, 16cm), gplot(subgraph, layout=circular_layout, nodelabel=nodelabels, edgelabel=edgelabels))
 
 end

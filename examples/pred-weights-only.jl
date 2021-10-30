@@ -21,4 +21,4 @@ for i in 1:size(data, 1)
     process_input!(en, data[i, :])
 end
 
-draw_en(en)
+draw_en("prw.pdf", en)
