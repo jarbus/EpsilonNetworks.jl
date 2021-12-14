@@ -1,4 +1,4 @@
-include("../src/epsilon-network.jl")
+using EpsilonNetworks
 
 # Falling ball example
 # Black is 1 2 3, White is 4 5 6
@@ -22,4 +22,4 @@ for i in 1:size(data, 1)
     process_input!(en, data[i, :])
 end
 
-draw_en(en)
+draw_en("pattern-example.pdf",en)
