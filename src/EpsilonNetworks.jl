@@ -10,8 +10,6 @@ using GraphPlot
 using Compose
 import Cairo, Fontconfig
 
-using Test
-
 include("./epsilon-network.jl")
 export
     EpsilonNetwork,
