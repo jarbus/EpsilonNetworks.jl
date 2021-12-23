@@ -132,12 +132,11 @@ function compute_predictions!(en::EpsilonNetwork)
     empty!(en.predicted)
     for neuron in active_neurons(en)
         for pred in outneighbors(en.prw, neuron)
-            if PrW(en.prw, neuron, pred) >= 0.8
-                set_prop!(en.prw, neuron, pred, :activation, 1)
+
+            @debug "PrW: " PrW(en.prw, neuron, pred)
+            set_prop!(en.prw, neuron, pred, :activation, 1)
+            if PrW(en.prw, neuron, pred) > 0.8
                 push!(en.predicted, pred)
-            else
-                @debug "did not predict $(pred) given $(neuron) because the PrW was $(PrW(en.prw, neuron, pred))"
-                @debug "PrW: " PrW(en.prw, neuron, pred)
             end
 
         end
@@ -148,27 +147,34 @@ end
 
 # Create prediction weights if possible, else create pattern weights
 function create_connections!(en::EpsilonNetwork, neuron::Int)
+    @assert get_prop(en, neuron, :activation) == 1
+    neuron ∈ en.predicted && return false
     new_prws::Int = 0
-    @debug "stm" en.stm
+    # @debug "stm" en.stm
     for prev_neuron in en.stm
         new_prws += add_prw!(en.prw, prev_neuron, neuron)
     end
+    # TODO make this not occur when successfully predicted
     # Create pattern weight
     if new_prws == 0 && length(en.stm) > 1
+        create_pattern_weight(en, inneighbors(en.prw, neuron), neuron)
         @debug "creating pattern weight for" neuron
         # determine if previously active neurons predicted neuron
-        relevant_neis = [innei for innei in inneighbors(en.prw, neuron) if innei in en.stm]
-        not_predicted = max([PrW(en.prw, innei, neuron) for innei in relevant_neis]...) < 0.8
-        if not_predicted
-            create_pattern_weight(en, inneighbors(en.prw, neuron), neuron)
-        end
+        # relevant_neis = [innei for innei in inneighbors(en.prw, neuron) if innei in en.stm]
+        # @debug relevant_neis, neurons(en)
+        # not_predicted = max([PrW(en.prw, innei, neuron) for innei in relevant_neis]...) < 0.8
+        # if not_predicted
+        # else
+        #     @debug max([PrW(en.prw, innei, neuron) for innei in relevant_neis]...)
+        #     println(repeat("hello", 1000))
+        # end
     end
+    return true
 end
 
 
 function process_input!(en::EpsilonNetwork, input_vector::Vector{Int})
-    @debug "this predicted" en.predicted
-    println("Beginning timestep ", en.time_step)
+    @debug "Beginning timestep " en.time_step
     for input in input_vector
         neuron = en.snap_map[input]
         if !is_active(en, neuron)
@@ -179,7 +185,6 @@ function process_input!(en::EpsilonNetwork, input_vector::Vector{Int})
     activate_PaW!(en)
     activate_PrW!(en)
 
-    @debug "that predicted" en.predicted
     for neuron in active_neurons(en)
         if neuron ∉ en.predicted
             create_connections!(en, neuron)
@@ -187,7 +192,7 @@ function process_input!(en::EpsilonNetwork, input_vector::Vector{Int})
     end
     empty!(en.stm)
     compute_predictions!(en)
-    println("predictions:", en.predicted)
+    @debug "predictions:" en.predicted
 
     for neuron in active_neurons(en)
         push!(en.stm, neuron)
@@ -204,9 +209,9 @@ end
 # Functions to act on all graphs in the epsilon network
 function activate_neuron!(en::EpsilonNetwork, v::Int)
     set_prop!(en, v, :activation, 1)
-    if get_prop(en, v, :age) < M # M=20 from paper
-        update_prop!(en, v, :age, x->x+1)
-    end
+    # if get_prop(en, v, :age) < M # M=20 from paper
+    #     update_prop!(en, v, :age, x->x+1)
+    # end
     # If neuron is not predicted, add prw
 end
 
@@ -341,28 +346,35 @@ function determine_edge_color(en::EpsilonNetwork, e::SimpleEdge)::String
 end
 
 function determine_edge_label(en::EpsilonNetwork, e::SimpleEdge)::String
-    has_edge(en.paw, e) ? "" : string(PrW(en.prw, e))
+    has_edge(en.paw, e) ? w(en, e.src) |> string : string(PrW(en.prw, e; one_decimal=true))
 end
 
 function draw_en(filename::String, en::EpsilonNetwork; hide_small_predictions::Bool=true)
+    # We heavily modify structure of EN to make it suitable for printing
+    en2 = deepcopy(en)
     # Remove PrW with small probabilities
-    hide_small_predictions && rem_small_prw!(en.prw)
-    # Draw all nodes in en
-    nodelabels = [get_prop(en, n, :name) for n in neurons(en)]
+    hide_small_predictions && rem_small_prw!(en2.prw)
 
-    prw_visible_graph = induced_subgraph(en.prw, [n for n in neurons(en) if !removed(n, en.prw)])[1]
-    paw_visible_graph = induced_subgraph(en.paw, [n for n in neurons(en) if !removed(n, en.paw)])[1]
-    #gplot(g, edgestrokec = ["red", "red", "blue", "blue"])
-    visible_en_graph = union(prw_visible_graph.graph, paw_visible_graph.graph)
-
-    for edge in edges(visible_en_graph)
-        if !valid_edge(en, edge)
-            rem_edge!(visible_en_graph, edge)
+    # Get rid of all bad edges
+    for net in networks(en2), edge in edges(net)
+        if !valid_edge(en2, edge)
+            rem_edge!(net, edge)
         end
     end
 
-    edgelabels = [determine_edge_label(en, e) for e in edges(visible_en_graph)]
-    edge_colors = [determine_edge_color(en, e) for e in edges(visible_en_graph)]
+    nodelabels = [get_prop(en2, n, :name) for n in neurons(en2)]
+
+    # We use this to instead of the subgraph of non-removed neurons in order
+    # to keep the node information of the edges when making labels and colors
+    giga_graph = union([net.graph for net in networks(en2)]...)
+
+    prw_visible_graph = induced_subgraph(en2.prw, neurons(en2))[1]
+    paw_visible_graph = induced_subgraph(en2.paw, neurons(en2))[1]
+    #gplot(g, edgestrokec = ["red", "red", "blue", "blue"])
+    visible_en_graph = union(prw_visible_graph.graph, paw_visible_graph.graph)
+
+    edgelabels = [determine_edge_label(en2, e) for e in edges(giga_graph)]
+    edge_colors = [determine_edge_color(en2, e) for e in edges(giga_graph)]
 
     draw(
         PDF(filename, 16cm, 16cm),

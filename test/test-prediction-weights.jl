@@ -27,13 +27,13 @@
 end
 
 @testset "snap" begin
-
     en = EpsilonNetwork(4)
 
     for _ in 1:4
         process_input!(en, [1, 2, 3])
         process_input!(en, [4])
-    EpsilonNetworks.snap(en)
-    @test ne(en.prw) == 1
-    @test length(neurons(en.prw)) == 2
+    end
+    EpsilonNetworks.snap!(en)
+    @test ne(en.prw) == 2
+    @test length(EpsilonNetworks.neurons(en.prw)) == 2
 end

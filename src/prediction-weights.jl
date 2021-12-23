@@ -22,7 +22,6 @@ function add_prw!(prw::MetaDiGraph, v1::Int, v2::Int)::Bool
             set_props!(prw, v1, v2, copy(DEFAULT_PRW_PROPERTIES))
             return true
         elseif get_prop(prw, v1, :age) < M # M=20 from paper
-            update_prop!(prw, v1, v2, :value, x->x+1)
         end
     end
     return false
@@ -32,9 +31,11 @@ function update_prw!(prw::MetaDiGraph, v1::Int, v2::Int)::Bool
     if removed(v1, prw) || removed(v2, prw) || !has_edge(prw, v1, v2) return false end
     if get_prop(prw, v1, v2, :activation) == 1 && get_prop(prw, v2, :activation) == 1
         update_prop!(prw, v1, v2, :value, x->x+1)
+        @debug "updating value"
     end
     if get_prop(prw, v1, :activation) == 1
         update_prop!(prw, v1, v2, :age, x->x+1)
+        @debug "updating age"
     end
     return true
 end
@@ -55,25 +56,26 @@ end
     Returns prediction weight probability between v1 and v2 if it exists,
 returns 0 otherwise
 """
-function PrW(prw::MetaDiGraph, v1::Int, v2::Int)
+function PrW(prw::MetaDiGraph, v1::Int, v2::Int; one_decimal::Bool=false)
     if has_edge(prw, v1, v2)
         if get_prop(prw, v1, v2, :value) > get_prop(prw, v1, :age)
             error("Error:", get_prop(prw, v1, v2, :value), ">", get_prop(prw, v1, :age))
         end
-        return round(get_prop(prw, v1, v2, :value) /
-              get_prop(prw, v1, :age), digits=1)
+        p = get_prop(prw, v1, v2, :value) / get_prop(prw, v1, :age)
+        one_decimal && return round(p, digits=1)
+        return p
     end
     return 0
 end
 
-PrW(prw::MetaDiGraph, edge) = PrW(prw, edge.src, edge.dst)
+PrW(prw::MetaDiGraph, edge; one_decimal::Bool=false) = PrW(prw, edge.src, edge.dst;one_decimal=one_decimal)
 
 function is_similar(prw::MetaDiGraph, v1::Int, v2::Int)
     if outneighbors(prw, v1) != outneighbors(prw, v2)
         return false
     end
     for neighbor in outneighbors(prw, v1)
-        if PrW(prw, v1, neighbor) != PrW(prw, v2, neighbor)
+        if PrW(prw, v1, neighbor; one_decimal=true) != PrW(prw, v2, neighbor; one_decimal=true)
             return false
         end
     end
