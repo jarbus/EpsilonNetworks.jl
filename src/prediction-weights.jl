@@ -2,7 +2,8 @@ DEFAULT_PRW_PROPERTIES = Dict(
     :activation => 0,
     :age => 1,
     :value => 1,
-    :weight => :prw
+    :weight => :prw,
+    :p => 1
 )
 
 neurons(g) = [v for v in vertices(g) if !removed(v, g)]
@@ -16,13 +17,12 @@ Returns:
     Note: Can return false even when PrW is updated
 """
 function add_prw!(prw::MetaDiGraph, v1::Int, v2::Int)::Bool
-    if !removed(v1, prw) && !removed(v2, prw)
-        if !has_edge(prw, v1, v2)
-            add_edge!(prw, v1, v2)
-            set_props!(prw, v1, v2, copy(DEFAULT_PRW_PROPERTIES))
-            return true
-        elseif get_prop(prw, v1, :age) < M # M=20 from paper
-        end
+    if !removed(v1, prw) && !removed(v2, prw) && !has_edge(prw, v1, v2)
+        add_edge!(prw, v1, v2)
+        set_props!(prw, v1, v2, copy(DEFAULT_PRW_PROPERTIES))
+        return true
+        # deal with this later
+        # elseif get_prop(prw, v1, :age) < M # M=20 from paper
     end
     return false
 end
@@ -31,12 +31,19 @@ function update_prw!(prw::MetaDiGraph, v1::Int, v2::Int)::Bool
     if removed(v1, prw) || removed(v2, prw) || !has_edge(prw, v1, v2) return false end
     if get_prop(prw, v1, v2, :activation) == 1 && get_prop(prw, v2, :activation) == 1
         update_prop!(prw, v1, v2, :value, x->x+1)
-        @debug "updating value"
     end
+
+    p = get_prop(prw, v1, v2, :value) / get_prop(prw, v1, v2, :age)
+    set_prop!(prw, v1, v2, :p, p)
     if get_prop(prw, v1, :activation) == 1
+
         update_prop!(prw, v1, v2, :age, x->x+1)
-        @debug "updating age"
     end
+
+    if p > 1
+        error("Error:", get_prop(prw, v1, v2, :value), ">", get_prop(prw, v1, v2, :age))
+    end
+
     return true
 end
 
@@ -58,10 +65,10 @@ returns 0 otherwise
 """
 function PrW(prw::MetaDiGraph, v1::Int, v2::Int; one_decimal::Bool=false)
     if has_edge(prw, v1, v2)
-        if get_prop(prw, v1, v2, :value) > get_prop(prw, v1, :age)
-            error("Error:", get_prop(prw, v1, v2, :value), ">", get_prop(prw, v1, :age))
+        if get_prop(prw, v1, v2, :value) > get_prop(prw, v1, v2, :age)
+            error("Error:", get_prop(prw, v1, v2, :value), ">", get_prop(prw, v1, v2, :age))
         end
-        p = get_prop(prw, v1, v2, :value) / get_prop(prw, v1, :age)
+        p = get_prop(prw, v1, v2, :p)
         one_decimal && return round(p, digits=1)
         return p
     end
@@ -80,4 +87,13 @@ function is_similar(prw::MetaDiGraph, v1::Int, v2::Int)
         end
     end
     return true
+end
+
+function activate_PrW!(en::EpsilonNetwork)
+    for prw in edges(en.prw)
+        update_prw!(en.prw, prw.src, prw.dst)
+        if get_prop(en.prw, prw, :activation) == 1
+            set_prop!(en, prw, :activation, 0)
+        end
+    end
 end
