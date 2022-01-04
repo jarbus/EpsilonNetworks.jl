@@ -166,10 +166,12 @@ end
 
 function remove_neuron!(en::EpsilonNetwork, v::Int)
     for weight_graph in networks(en)
-        for neighbor in inneighbors(weight_graph, v)
+        inn = inneighbors(weight_graph, v) |> collect
+        onn = outneighbors(weight_graph, v) |> collect
+        for neighbor in inn
             rem_edge!(weight_graph, neighbor, v)
         end
-        for neighbor in outneighbors(weight_graph, v)
+        for neighbor in onn
             rem_edge!(weight_graph, v, neighbor)
         end
         set_prop!(weight_graph, v, :removed, true)
@@ -295,33 +297,12 @@ function determine_edge_label(en::EpsilonNetwork, e::SimpleEdge)::String
     has_edge(en.paw, e) ? w(en, e.src, e.dst) |> string : string(PrW(en.prw, e; one_decimal=true))
 end
 
-function remove_invalid_edges!(en::EpsilonNetwork)
-    for net in networks(en)
-        # make a copy of the edges since the iterator
-        # would change if we remove them during floop
-        es = edges(net) |> collect
-        for edge in es
-            if !valid_edge(net, edge)
-                rem_edge!(net, edge)
-            end
-        end
-    end
-end
-
 function draw_en(filename::String, en::EpsilonNetwork; hide_small_predictions::Bool=true)
     # We heavily modify structure of EN to make it suitable for printing
+    # So we operate on a copy
     en2 = deepcopy(en)
     # Remove PrW with small probabilities
     hide_small_predictions && rem_small_prw!(en2.prw)
-
-    # Get rid of all bad edges
-    remove_invalid_edges!(en2)
-    for edge in edges(en2.prw)
-        @assert valid_edge(en2.prw, edge)
-        @assert !removed(edge.src, en2.prw) && !removed(edge.dst, en2.prw)
-        @assert !removed(edge.src, en2.prw)
-        @assert !removed(edge.dst, en2.prw)
-    end
 
     nodelabels = [get_prop(en2, n, :name) for n in neurons(en2)]
 
